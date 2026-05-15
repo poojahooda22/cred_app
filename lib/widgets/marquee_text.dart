@@ -11,7 +11,7 @@ class MarqueeWidget extends StatefulWidget {
     required this.text,
     required this.style,
     this.pixelsPerSecond = 30,
-    this.gap = 32,
+    this.gap = 8,
   });
 
   @override
