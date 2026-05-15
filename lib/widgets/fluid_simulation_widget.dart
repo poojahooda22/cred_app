@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
+import 'package:neopop/neopop.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 
 import '../simulation/flip_fluid.dart';
@@ -39,10 +41,10 @@ class _FluidSimulationWidgetState extends State<FluidSimulationWidget>
   double _viewBottom = 0.0;
   double _particleScreenRadius = 3.0;
 
-  // Sim constants (matching the original mobile path exactly)
+  // Sim constants
   static const double _simHeight = 3.0;
-  static const double _gapPx = 6.5; // (6.5 - 5) / cScale ≈ 1px visible gap
-  static const double _targetRadiusPx = 5.0; // mobile: ~6px rendered diameter
+  static const double _gapPx = 6.5;
+  static const double _targetRadiusPx = 5.0;
   static const double _density = 1000.0;
 
   @override
@@ -67,19 +69,13 @@ class _FluidSimulationWidgetState extends State<FluidSimulationWidget>
     final cScale = heightPx / _simHeight;
     final simWidth = widthPx / cScale;
 
-    // Grid resolution from target rendered particle size
-    // r/h = 0.3 keeps FLIP grid coupling stable (original formula)
     final res = (0.3 * heightPx / _targetRadiusPx).round();
     final tankH = 1.0 * _simHeight;
     final tankW = 1.0 * simWidth;
     final h = tankH / res;
     final r = 0.3 * h;
-
-    // Mobile gap: original uses (GAP_PX - 5) / cScale → NEGATIVE on mobile
-    // This makes particles pack tighter than 2r — critical for fluid density
     final gapSim = (_gapPx - 5) / cScale;
 
-    // Particle count from full-tank hex capacity
     final wallPad = r + gapSim * 0.5;
     final minDistSpawn = 2.0 * r + gapSim;
     final dx = minDistSpawn;
@@ -95,15 +91,14 @@ class _FluidSimulationWidgetState extends State<FluidSimulationWidget>
       height: tankH,
       spacing: h,
       particleRadius: r,
-      particleGap: gapSim, // allow negative — original does this on mobile
+      particleGap: gapSim,
       maxParticles: maxParticles.clamp(500, 8000),
     );
 
-    // Map the fluid domain (excluding solid boundary cells) to the full widget
     final fluidW = (_fluid!.fNumX - 2) * _fluid!.h;
     _scale = widthPx / fluidW;
-    _viewLeft = _fluid!.h;     // skip left boundary cell
-    _viewBottom = _fluid!.h;   // skip bottom boundary cell
+    _viewLeft = _fluid!.h;
+    _viewBottom = _fluid!.h;
     _particleScreenRadius = r * _scale;
   }
 
@@ -121,16 +116,13 @@ class _FluidSimulationWidgetState extends State<FluidSimulationWidget>
         samplingPeriod: const Duration(milliseconds: 32),
       ).listen((event) {
         final raw = -event.x;
-        // Deadzone + clamp + scale (matching original: 3° deadzone, ±30°, scale 5.0)
         if (raw.abs() < 0.5) {
           _tiltX = 0.0;
         } else {
-          _tiltX = (raw.clamp(-5.0, 5.0));
+          _tiltX = raw.clamp(-5.0, 5.0);
         }
       });
-    } catch (_) {
-      // Sensors not available
-    }
+    } catch (_) {}
   }
 
   void _onTick(Duration elapsed) {
@@ -138,13 +130,9 @@ class _FluidSimulationWidgetState extends State<FluidSimulationWidget>
     final f = _fluid!;
     const dt = 1.0 / 60.0;
 
-    // Compute obstacle velocity from position delta
     if (_touching) {
-      _obstacleVelX = (_obstacleX - _prevObstacleX) / dt;
-      _obstacleVelY = (_obstacleY - _prevObstacleY) / dt;
-      // EMA smooth + clamp (matching original)
-      _obstacleVelX = _obstacleVelX.clamp(-12.0, 12.0);
-      _obstacleVelY = _obstacleVelY.clamp(-12.0, 12.0);
+      _obstacleVelX = ((_obstacleX - _prevObstacleX) / dt).clamp(-12.0, 12.0);
+      _obstacleVelY = ((_obstacleY - _prevObstacleY) / dt).clamp(-12.0, 12.0);
       _prevObstacleX = _obstacleX;
       _prevObstacleY = _obstacleY;
     }
@@ -164,7 +152,6 @@ class _FluidSimulationWidgetState extends State<FluidSimulationWidget>
       tiltForceX: _tiltX,
     );
 
-    // Idle wave AFTER simulate (so pressure solver doesn't cancel it)
     if (f.frameCount > 120) {
       final ramp = ((f.frameCount - 120) / 60.0).clamp(0.0, 1.0);
       f.applyIdleWave(dt, 0.60 * ramp, 3.2, 0.06 * ramp);
@@ -213,53 +200,32 @@ class _FluidSimulationWidgetState extends State<FluidSimulationWidget>
             _obstacleVelX = 0;
             _obstacleVelY = 0;
           },
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(20),
-            child: Container(
-              width: width,
-              height: widget.height,
-              color: const Color(0xFF141414), // one step lighter than app bg (0x0A)
-              child: Stack(
-                children: [
-                  if (_fluid != null)
-                    RepaintBoundary(
-                      child: CustomPaint(
-                        size: Size(width, widget.height),
-                        painter: _FluidPainter(
-                          fluid: _fluid!,
-                          repaint: _repaint,
-                          scale: _scale,
-                          viewLeft: _viewLeft,
-                          viewBottom: _viewBottom,
-                          containerHeight: widget.height,
-                          particleScreenRadius: _particleScreenRadius,
-                        ),
+          // No card, no border — transparent, particles render on page background
+          child: SizedBox(
+            width: width,
+            height: widget.height,
+            child: Stack(
+              children: [
+                if (_fluid != null)
+                  RepaintBoundary(
+                    child: CustomPaint(
+                      size: Size(width, widget.height),
+                      painter: _FluidPainter(
+                        fluid: _fluid!,
+                        repaint: _repaint,
+                        scale: _scale,
+                        viewLeft: _viewLeft,
+                        viewBottom: _viewBottom,
+                        containerHeight: widget.height,
+                        particleScreenRadius: _particleScreenRadius,
                       ),
                     ),
-                  if (!_isPlaying)
-                    Positioned.fill(
-                      child: _PlayOverlay(onPlay: _startSimulation),
-                    ),
-                  if (_touching && _isPlaying)
-                    Positioned(
-                      left: (_obstacleX - _viewLeft) * _scale - 18,
-                      top: widget.height -
-                          (_obstacleY - _viewBottom) * _scale -
-                          18,
-                      child: Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.2),
-                            width: 1.5,
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
+                  ),
+                if (!_isPlaying)
+                  Positioned.fill(
+                    child: _PlayOverlay(onPlay: _startSimulation),
+                  ),
+              ],
             ),
           ),
         );
@@ -274,47 +240,50 @@ class _PlayOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.4),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            GestureDetector(
-              onTap: onPlay,
-              child: Container(
-                width: 72,
-                height: 72,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.3),
-                    width: 1.5,
-                  ),
-                  color: Colors.white.withValues(alpha: 0.08),
-                ),
-                child: const Icon(
-                  Icons.play_arrow_rounded,
-                  color: Colors.white,
-                  size: 36,
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            "you've reached the end",
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.2),
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              letterSpacing: 1.0,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'must be bored.',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.35),
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.5,
+            ),
+          ),
+          const SizedBox(height: 20),
+          NeoPopButton(
+            color: Colors.white,
+            onTapUp: () {
+              HapticFeedback.mediumImpact();
+              onPlay();
+            },
+            onTapDown: () => HapticFeedback.lightImpact(),
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 28, vertical: 12),
+              child: Text(
+                "let's play",
+                style: TextStyle(
+                  color: Colors.black,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ),
-            const SizedBox(height: 14),
-            Text(
-              'tap to play',
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.4),
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                letterSpacing: 1.2,
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

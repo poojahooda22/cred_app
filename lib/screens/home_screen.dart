@@ -73,7 +73,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               SliverToBoxAdapter(child: _buildExploreCred()),
               SliverToBoxAdapter(child: _buildRewardsCard()),
               SliverToBoxAdapter(child: _buildFluidSection()),
-              const SliverToBoxAdapter(child: SizedBox(height: 100)),
             ],
           ),
         ),
@@ -711,33 +710,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
 
   Widget _buildFluidSection() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 32, 16, 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'PLAY ZONE',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              letterSpacing: 1.5,
-              fontWeight: FontWeight.w600,
-              color: CredColors.secondary,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'tilt your phone to play.',
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.35),
-              fontSize: 11,
-              fontWeight: FontWeight.w400,
-            ),
-          ),
-          const SizedBox(height: 12),
-          const FluidSimulationWidget(height: 420),
-        ],
-      ),
-    );
+    // Extend to phone bottom — include nav bar + bottom padding
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
+    final navBarHeight = kBottomNavigationBarHeight;
+    final totalHeight = 420 + navBarHeight + bottomPadding;
+    return FluidSimulationWidget(height: totalHeight);
   }
 
   String _formatIndian(int n) {

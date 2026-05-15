@@ -102,6 +102,7 @@ class FlipFluid {
   void spawnHexPacked({
     double relWaterWidth = 1.0,
     double relWaterHeight = 0.42,
+    double xOffsetFraction = 0.0, // 0.0 = left edge, 0.5 = right half
   }) {
     final minDistSpawn = 2.0 * particleRadius + particleGap;
     final dx = minDistSpawn;
@@ -110,26 +111,28 @@ class FlipFluid {
     final jitter = 0.2 * particleRadius;
     final rng = Random(42);
 
-    final numX =
-        ((relWaterWidth * simWidth - 2.0 * h - 2.0 * wallPad) / dx).round();
+    final spawnWidth = relWaterWidth * simWidth;
+    final xStart = h + wallPad + (simWidth - 2.0 * h - 2.0 * wallPad) * xOffsetFraction;
+    final numX = ((spawnWidth - 2.0 * h - 2.0 * wallPad) / dx).round();
     final numY =
         ((relWaterHeight * simHeight - 2.0 * h - 2.0 * wallPad) / dy).round();
 
     int p = 0;
-    final count = min(numX * numY, maxParticles);
     for (int i = 0; i < numX; i++) {
       for (int j = 0; j < numY; j++) {
         if (p ~/ 2 >= maxParticles) break;
-        particlePos[p++] = h +
-            wallPad +
+        final px = xStart +
             dx * i +
             (j % 2 == 0 ? 0.0 : 0.5 * dx) +
             (rng.nextDouble() - 0.5) * jitter;
+        // Clamp to right wall
+        if (px > (fNumX - 1) * h - wallPad) continue;
+        particlePos[p++] = px;
         particlePos[p++] =
             h + wallPad + dy * j + (rng.nextDouble() - 0.5) * jitter;
       }
     }
-    numParticles = count;
+    numParticles = p ~/ 2;
 
     // Compute rest density from initial packing
     _updateParticleDensity();
