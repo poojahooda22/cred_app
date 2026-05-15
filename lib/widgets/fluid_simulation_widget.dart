@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
-import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -43,8 +41,8 @@ class _FluidSimulationWidgetState extends State<FluidSimulationWidget>
 
   // Sim constants (matching the original mobile path exactly)
   static const double _simHeight = 3.0;
-  static const double _gapPx = 4.0; // original GAP_PX
-  static const double _targetRadiusPx = 4.0; // smaller for mobile (original: 7)
+  static const double _gapPx = 6.5; // (6.5 - 5) / cScale ≈ 1px visible gap
+  static const double _targetRadiusPx = 5.0; // mobile: ~6px rendered diameter
   static const double _density = 1000.0;
 
   @override
@@ -88,7 +86,7 @@ class _FluidSimulationWidgetState extends State<FluidSimulationWidget>
     final fullNumX = ((tankW - 2.0 * h - 2.0 * wallPad) / dx).round();
     final fullNumY = ((tankH - h - 2.0 * wallPad) / (dx * 0.866)).round();
     final tankCapacity = fullNumX * fullNumY;
-    final targetParticles = (0.45 * tankCapacity).floor();
+    final targetParticles = (0.45 * tankCapacity).floor() + 400;
     final maxParticles = (targetParticles * 2.5).ceil();
 
     _fluid = FlipFluid(
@@ -101,15 +99,17 @@ class _FluidSimulationWidgetState extends State<FluidSimulationWidget>
       maxParticles: maxParticles.clamp(500, 8000),
     );
 
-    _scale = cScale;
-    _viewLeft = h;
-    _viewBottom = h;
-    _particleScreenRadius = r * cScale;
+    // Map the fluid domain (excluding solid boundary cells) to the full widget
+    final fluidW = (_fluid!.fNumX - 2) * _fluid!.h;
+    _scale = widthPx / fluidW;
+    _viewLeft = _fluid!.h;     // skip left boundary cell
+    _viewBottom = _fluid!.h;   // skip bottom boundary cell
+    _particleScreenRadius = r * _scale;
   }
 
   void _startSimulation() {
     if (_fluid == null) return;
-    _fluid!.spawnHexPacked(relWaterWidth: 1.0, relWaterHeight: 0.42);
+    _fluid!.spawnHexPacked(relWaterWidth: 1.0, relWaterHeight: 0.45);
     setState(() => _isPlaying = true);
     _ticker.start();
     _startAccelerometer();
@@ -218,7 +218,7 @@ class _FluidSimulationWidgetState extends State<FluidSimulationWidget>
             child: Container(
               width: width,
               height: widget.height,
-              color: const Color(0xFF0A0A0A),
+              color: const Color(0xFF141414), // one step lighter than app bg (0x0A)
               child: Stack(
                 children: [
                   if (_fluid != null)
@@ -342,19 +342,18 @@ class _FluidPainter extends CustomPainter {
     final n = fluid.numParticles;
     if (n == 0) return;
 
-    final points = Float32List(n * 2);
-    for (int i = 0; i < n; i++) {
-      points[i * 2] = (fluid.particlePos[i * 2] - viewLeft) * scale;
-      points[i * 2 + 1] =
-          containerHeight - (fluid.particlePos[i * 2 + 1] - viewBottom) * scale;
-    }
-
     final paint = Paint()
       ..color = const Color(0xD9FFFFFF)
-      ..strokeWidth = particleScreenRadius * 2
-      ..strokeCap = StrokeCap.round;
+      ..style = PaintingStyle.fill;
 
-    canvas.drawRawPoints(PointMode.points, points, paint);
+    final r = particleScreenRadius - 1.0;
+
+    for (int i = 0; i < n; i++) {
+      final sx = (fluid.particlePos[i * 2] - viewLeft) * scale;
+      final sy =
+          containerHeight - (fluid.particlePos[i * 2 + 1] - viewBottom) * scale;
+      canvas.drawCircle(Offset(sx, sy), r, paint);
+    }
   }
 
   @override

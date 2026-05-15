@@ -98,29 +98,18 @@ class _RewardLogoDispenserState extends State<RewardLogoDispenser> with SingleTi
               bottom: 0,
               left: 0,
               right: 0,
-              height: 16,
-              child: Column(
-                children: [
-                  Container(
-                    height: 2,
-                    width: double.infinity,
-                    color: const Color(0xFFFF00FF),
-                  ),
-                  Expanded(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF2E2E2E),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.5),
-                            blurRadius: 8,
-                            offset: const Offset(0, -2),
-                          ),
-                        ],
-                      ),
+              height: 14,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2E2E2E),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.5),
+                      blurRadius: 8,
+                      offset: const Offset(0, -2),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ],
